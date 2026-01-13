@@ -1,28 +1,30 @@
-# Simple deployment using HTTP for model sharing - No ReadWriteMany needed!
+# Dual-server deployment for CKS cluster using HTTP for model sharing
 
 # --- 1. ConfigMaps ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: latency-predictor-config
-  namespace: default
+  namespace: llm-d-pd
 data:
-  LATENCY_RETRAINING_INTERVAL_SEC: "1"
+  LATENCY_RETRAINING_INTERVAL_SEC: "30"
   LATENCY_MIN_SAMPLES_FOR_RETRAIN: "100"
   LATENCY_TTFT_MODEL_PATH: "/models/ttft.joblib"
   LATENCY_TPOT_MODEL_PATH: "/models/tpot.joblib"
   LATENCY_TTFT_SCALER_PATH: "/models/ttft_scaler.joblib"
   LATENCY_TPOT_SCALER_PATH: "/models/tpot_scaler.joblib"
   LATENCY_MODEL_TYPE: "xgboost"
+  LATENCY_MAX_TRAINING_DATA_SIZE_PER_BUCKET: "5000"
+  LATENCY_QUANTILE_ALPHA: "0.9"
 
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: prediction-server-config
-  namespace: default
+  namespace: llm-d-pd
 data:
-  MODEL_SYNC_INTERVAL_SEC: "10"  # Download models every 5 seconds
+  MODEL_SYNC_INTERVAL_SEC: "10"  # Download models every 10 seconds
   LATENCY_MODEL_TYPE: "xgboost"
   PREDICT_HOST: "0.0.0.0"
   PREDICT_PORT: "8001"
@@ -34,40 +36,26 @@ data:
   HTTP_TIMEOUT: "30"
 
 ---
-# --- 2. StorageClass for Hyperdisk ---
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: hyperdisk-balanced-sc
-provisioner: pd.csi.storage.gke.io
-parameters:
-  type: hyperdisk-balanced
-reclaimPolicy: Delete
-allowVolumeExpansion: true
-volumeBindingMode: WaitForFirstConsumer
-
----
-# --- 3. Persistent Volume Claim (PVC) ---
-# Requests persistent storage for the models using the custom StorageClass.
+# --- 2. Persistent Volume Claim (PVC) ---
+# Requests persistent storage for the models - uses default storage class
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: training-models-pvc
-  namespace: default
+  namespace: llm-d-pd
 spec:
-  storageClassName: hyperdisk-balanced-sc # Explicitly use the compatible StorageClass
   accessModes:
-    - ReadWriteOnce # Sufficient since only the leader pod writes to the volume.
+    - ReadWriteOnce # Sufficient since only the training pod writes to the volume
   resources:
     requests:
-      storage: 100Gi
+      storage: 10Gi
 ---
 # --- 3. Training Server Deployment ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: training-server-deployment
-  namespace: default
+  namespace: llm-d-pd
   labels:
     app: training-server
     component: training
@@ -83,12 +71,9 @@ spec:
         app: training-server
         component: training
     spec:
-      nodeSelector:
-        cloud.google.com/gke-nodepool: "pool-2"
       containers:
       - name: training-server
-        image: placeholder-for-training-server-image:latest # TODO Replace with actual image
-
+        image: quay.io/rh_ee_rsaini/latency-training:slo-experimental
         imagePullPolicy: Always
         ports:
         - containerPort: 8000
@@ -106,16 +91,12 @@ spec:
           initialDelaySeconds: 45
           periodSeconds: 10
         resources:
-          # Increased CPU & memory
           requests:
-            cpu: "1000m"            # was 500m
-            memory: "2Gi"           # was 512Mi
-            #ephemeral-storage: "50Gi" # new: reserve 5Gi of scratch space
+            cpu: "1000m"
+            memory: "2Gi"
           limits:
-            cpu: "2000m"            # was 1000m
-            memory: "4Gi"           # was 1Gi
-            #ephemeral-storage: "100Gi" # new: cap at 10Gi of scratch space
-
+            cpu: "2000m"
+            memory: "4Gi"
         envFrom:
         - configMapRef:
             name: latency-predictor-config
@@ -140,7 +121,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: prediction-server-deployment
-  namespace: default
+  namespace: llm-d-pd
   labels:
     app: prediction-server
     component: prediction
@@ -156,11 +137,9 @@ spec:
         app: prediction-server
         component: prediction
     spec:
-      nodeSelector:
-        cloud.google.com/gke-nodepool: "pool-2"
       containers:
       - name: prediction-server
-        image: placeholder-for-prediction-server-image:latest # TODO Replace with actual image
+        image: quay.io/rh_ee_rsaini/latency-prediction:slo-experimental
         imagePullPolicy: Always
         ports:
         - containerPort: 8001
@@ -209,7 +188,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: training-service
-  namespace: default
+  namespace: llm-d-pd
   labels:
     component: training
 spec:
@@ -228,7 +207,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: prediction-service
-  namespace: default
+  namespace: llm-d-pd
   labels:
     component: prediction
 spec:
@@ -248,7 +227,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: training-service-external
-  namespace: default
+  namespace: llm-d-pd
 spec:
   type: LoadBalancer
   selector:

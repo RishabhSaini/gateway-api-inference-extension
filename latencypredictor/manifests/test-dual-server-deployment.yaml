@@ -3,7 +3,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: latency-predictor-test
-  namespace: default
+  namespace: llm-d-pd
   labels:
     app: latency-predictor-test
     component: test
@@ -14,22 +14,19 @@ spec:
         app: latency-predictor-test
         component: test
     spec:
-      # Use the same node pool as your services
-      nodeSelector:
-        cloud.google.com/gke-nodepool: "pool-2"
       restartPolicy: Never
       containers:
       - name: test-runner
-        # Use your test image here
-        image: placeholder-for-test-image:latest # TODO Replace with actual test image
+        # Use the test image with pytest installed
+        image: quay.io/rh_ee_rsaini/latency-test:slo-experimental
         imagePullPolicy: Always
         resources:
           requests:
-            cpu: "500m"
-            memory: "50Gi"
-          limits:
             cpu: "1000m"
-            memory: "100Gi"
+            memory: "2Gi"
+          limits:
+            cpu: "2000m"
+            memory: "4Gi"
         env:
         # Point to your internal services
         - name: TRAINING_SERVER_URL
@@ -39,7 +36,9 @@ spec:
         - name: TEST_TIMEOUT
           value: "300"  # 5 minutes
         - name: TARGET_QPS
-          value: "1000"  # Match the target QPS in your test script
+          value: "50"  # Reduced from 1000 to avoid OOM (50 QPS × 100s = 5k tasks vs 100k)
+        - name: TARGET_QPS_LARGE_BATCH
+          value: "5"  # Reduced from 100 to avoid OOM with batch_size=1000
         envFrom:
         - configMapRef:
             name: prediction-server-config  # Reuse existing config if needed
