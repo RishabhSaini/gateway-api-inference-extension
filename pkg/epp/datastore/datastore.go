@@ -286,6 +286,7 @@ func (ds *datastore) PodUpdateOrAddIfNotExist(pod *corev1.Pod) bool {
 				Port:        strconv.Itoa(port),
 				MetricsHost: net.JoinHostPort(pod.Status.PodIP, strconv.Itoa(metricsPort)),
 				Labels:      labels,
+				NodeName:    pod.Spec.NodeName,
 			})
 	}
 

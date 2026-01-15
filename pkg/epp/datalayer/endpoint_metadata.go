@@ -38,6 +38,7 @@ type EndpointMetadata struct {
 	Port           string
 	MetricsHost    string
 	Labels         map[string]string
+	NodeName       string
 }
 
 // String returns a string representation of the endpoint.
@@ -68,6 +69,7 @@ func (p *EndpointMetadata) Clone() *EndpointMetadata {
 		Port:        p.Port,
 		MetricsHost: p.MetricsHost,
 		Labels:      clonedLabels,
+		NodeName:    p.NodeName,
 	}
 }
 
