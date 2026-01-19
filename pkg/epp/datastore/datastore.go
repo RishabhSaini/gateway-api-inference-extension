@@ -71,6 +71,11 @@ type Datastore interface {
 	PodUpdateOrAddIfNotExist(pod *corev1.Pod) bool
 	PodDelete(podName string)
 
+	// Node operations
+	NodeUpdateOrAddIfNotExist(node *corev1.Node)
+	NodeDelete(nodeName string)
+	GetNodeMetadata(nodeName string) *datalayer.NodeMetadata
+
 	// Clears the store state, happens when the pool gets deleted.
 	Clear()
 }
@@ -86,6 +91,7 @@ func NewDatastore(parentCtx context.Context, epFactory datalayer.EndpointFactory
 		objectives:             make(map[string]*v1alpha2.InferenceObjective),
 		modelRewrites:          newModelRewriteStore(),
 		pods:                   &sync.Map{},
+		nodes:                  &sync.Map{},
 		modelServerMetricsPort: modelServerMetricsPort,
 		epf:                    epFactory,
 	}
@@ -110,6 +116,8 @@ type datastore struct {
 	modelRewrites *modelRewriteStore
 	// key: types.NamespacedName, value: backendmetrics.PodMetrics
 	pods *sync.Map
+	// key: node name, value: *datalayer.NodeMetadata
+	nodes *sync.Map
 	// modelServerMetricsPort metrics port from EPP command line argument
 	// used only if there is only one inference engine per pod
 	modelServerMetricsPort int32 // TODO: deprecating
@@ -128,6 +136,7 @@ func (ds *datastore) Clear() {
 		return true
 	})
 	ds.pods.Clear()
+	ds.nodes.Clear()
 }
 
 // /// Pool APIs ///
@@ -282,6 +291,7 @@ func (ds *datastore) PodUpdateOrAddIfNotExist(pod *corev1.Pod) bool {
 					Namespace: pod.Namespace,
 				},
 				PodName:     pod.Name,
+				NodeName:    pod.Spec.NodeName,
 				Address:     pod.Status.PodIP,
 				Port:        strconv.Itoa(port),
 				MetricsHost: net.JoinHostPort(pod.Status.PodIP, strconv.Itoa(metricsPort)),
@@ -351,6 +361,37 @@ func (ds *datastore) podResyncAll(ctx context.Context, reader client.Reader) err
 		return true
 	})
 
+	return nil
+}
+
+// /// Node APIs ///
+func (ds *datastore) NodeUpdateOrAddIfNotExist(node *corev1.Node) {
+	// Copy all node labels to NodeMetadata
+	labels := make(map[string]string, len(node.GetLabels()))
+	for key, value := range node.GetLabels() {
+		labels[key] = value
+	}
+
+	nodeMetadata := &datalayer.NodeMetadata{
+		NodeName: node.Name,
+		Labels:   labels,
+	}
+
+	// Always store/update - reconciler only triggers on changes
+	ds.nodes.Store(node.Name, nodeMetadata)
+}
+
+func (ds *datastore) NodeDelete(nodeName string) {
+	ds.nodes.Delete(nodeName)
+}
+
+func (ds *datastore) GetNodeMetadata(nodeName string) *datalayer.NodeMetadata {
+	if nodeName == "" {
+		return nil
+	}
+	if nodeData, ok := ds.nodes.Load(nodeName); ok {
+		return nodeData.(*datalayer.NodeMetadata)
+	}
 	return nil
 }
 

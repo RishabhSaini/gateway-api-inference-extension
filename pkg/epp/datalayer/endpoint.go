@@ -26,6 +26,7 @@ type EndpointMetaState interface {
 	GetMetadata() *EndpointMetadata
 	UpdateMetadata(*EndpointMetadata)
 	GetAttributes() *Attributes
+	GetNodeMetadata() *NodeMetadata
 }
 
 // EndpointMetricsState allows management of the Metrics related attributes.
@@ -47,10 +48,11 @@ type ModelServer struct {
 	pod        atomic.Pointer[EndpointMetadata]
 	metrics    atomic.Pointer[Metrics]
 	attributes *Attributes
+	poolInfo   PoolInfo // Access to pool and node metadata
 }
 
 // NewEndpoint returns a new ModelServer with the given EndpointMetadata and Metrics.
-func NewEndpoint(meta *EndpointMetadata, metrics *Metrics) *ModelServer {
+func NewEndpoint(meta *EndpointMetadata, metrics *Metrics, poolInfo PoolInfo) *ModelServer {
 	if meta == nil {
 		meta = &EndpointMetadata{}
 	}
@@ -59,6 +61,7 @@ func NewEndpoint(meta *EndpointMetadata, metrics *Metrics) *ModelServer {
 	}
 	ep := &ModelServer{
 		attributes: NewAttributes(),
+		poolInfo:   poolInfo,
 	}
 	ep.UpdateMetadata(meta)
 	ep.UpdateMetrics(metrics)
@@ -103,9 +106,21 @@ func (srv *ModelServer) GetAttributes() *Attributes {
 	return srv.attributes
 }
 
+func (srv *ModelServer) GetNodeMetadata() *NodeMetadata {
+	if srv.poolInfo == nil {
+		return nil
+	}
+	meta := srv.GetMetadata()
+	if meta == nil {
+		return nil
+	}
+	return srv.poolInfo.GetNodeMetadata(meta.NodeName)
+}
+
 func (srv *ModelServer) Clone() *ModelServer {
 	clone := &ModelServer{
 		attributes: srv.attributes.Clone(),
+		poolInfo:   srv.poolInfo, // Share poolInfo reference
 	}
 	clone.pod.Store(srv.pod.Load().Clone())
 	clone.metrics.Store(srv.metrics.Load().Clone())

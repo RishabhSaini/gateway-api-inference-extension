@@ -38,9 +38,11 @@ const (
 //   - Endpoint metric scraping uses PoolGet to access the pool's Port and Name.
 //   - Global metrics logging uses PoolGet solely for error return and PodList to enumerate
 //     all endpoints for metrics summarization.
+//   - GetNodeMetadata allows endpoints to lookup node metadata by node name for topology-aware scoring.
 type PoolInfo interface {
 	PoolGet() (*EndpointPool, error)
 	PodList(func(Endpoint) bool) []Endpoint
+	GetNodeMetadata(nodeName string) *NodeMetadata
 }
 
 // EndpointFactory defines an interface for managing Endpoint lifecycle. Specifically,
@@ -81,7 +83,7 @@ func (lc *EndpointLifecycle) SetSources(sources []DataSource) {
 // NewEndpoint implements EndpointFactory.NewEndpoint.
 // Creates a new endpoint and starts its associated collector with its own ticker.
 // Guards against multiple concurrent calls for the same endpoint.
-func (lc *EndpointLifecycle) NewEndpoint(parent context.Context, inEndpointMetadata *EndpointMetadata, _ PoolInfo) Endpoint {
+func (lc *EndpointLifecycle) NewEndpoint(parent context.Context, inEndpointMetadata *EndpointMetadata, poolInfo PoolInfo) Endpoint {
 	key := types.NamespacedName{Namespace: inEndpointMetadata.GetNamespacedName().Namespace, Name: inEndpointMetadata.GetNamespacedName().Name}
 	logger := log.FromContext(parent).WithValues("pod", key)
 
@@ -90,7 +92,7 @@ func (lc *EndpointLifecycle) NewEndpoint(parent context.Context, inEndpointMetad
 		return nil
 	}
 
-	endpoint := NewEndpoint(inEndpointMetadata, nil)
+	endpoint := NewEndpoint(inEndpointMetadata, nil, poolInfo)
 	collector := NewCollector() // TODO or full backward compatibility, set the logger and poolinfo
 
 	if _, loaded := lc.collectors.LoadOrStore(key, collector); loaded {

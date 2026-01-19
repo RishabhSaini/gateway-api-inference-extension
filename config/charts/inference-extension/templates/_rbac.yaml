@@ -19,6 +19,14 @@ rules:
     - subjectaccessreviews
   verbs:
     - create
+- apiGroups:
+    - ""
+  resources:
+    - nodes
+  verbs:
+    - get
+    - watch
+    - list
 - nonResourceURLs:
     - "/metrics"
   verbs:

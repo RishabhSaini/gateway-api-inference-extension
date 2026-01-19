@@ -129,6 +129,17 @@ func (*podMetrics) GetAttributes() *datalayer.Attributes {
 	return nil
 }
 
+func (pm *podMetrics) GetNodeMetadata() *datalayer.NodeMetadata {
+	if pm.ds == nil {
+		return nil
+	}
+	meta := pm.GetMetadata()
+	if meta == nil {
+		return nil
+	}
+	return pm.ds.GetNodeMetadata(meta.NodeName)
+}
+
 func (pm *podMetrics) UpdateMetrics(updated *MetricsState) {
 	updated.UpdateTime = time.Now()
 	pm.logger.V(logutil.TRACE).Info("Refreshed metrics", "updated", updated)

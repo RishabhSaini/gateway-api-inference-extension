@@ -34,6 +34,7 @@ type Addressable interface {
 type EndpointMetadata struct {
 	NamespacedName types.NamespacedName
 	PodName        string
+	NodeName       string
 	Address        string
 	Port           string
 	MetricsHost    string
@@ -64,6 +65,7 @@ func (p *EndpointMetadata) Clone() *EndpointMetadata {
 			Namespace: p.NamespacedName.Namespace,
 		},
 		PodName:     p.PodName,
+		NodeName:    p.NodeName,
 		Address:     p.Address,
 		Port:        p.Port,
 		MetricsHost: p.MetricsHost,
