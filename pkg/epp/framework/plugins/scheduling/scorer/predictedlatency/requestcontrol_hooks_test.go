@@ -62,6 +62,7 @@ func createTestRouter() *PredictedLatency {
 		sloContextStore:     sync.Map{},
 		runningRequestLists: make(map[types.NamespacedName]*requestPriorityQueue),
 		latencypredictor:    nil,
+		requestBuilder:      &DefaultPredictionRequestBuilder{},
 		config:              DefaultConfig,
 	}
 }
