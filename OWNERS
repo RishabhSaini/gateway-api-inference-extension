@@ -1,8 +1,11 @@
-# See the OWNERS docs at https://go.k8s.io/owners
-
 approvers:
-- gateway-api-inference-extension-maintainers
-
+  - bartoszmajsak
+  - danielezonca
+  - pierDipi
+  - vivekk16
+  - llm-d-team
 reviewers:
-- gateway-api-inference-extension-reviewers
-- gateway-api-inference-extension-maintainers
+  - bartoszmajsak
+  - pierDipi
+  - vivekk16
+  - llm-d-team
