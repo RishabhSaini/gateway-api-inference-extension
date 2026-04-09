@@ -337,6 +337,7 @@ func (r *Runner) setup(ctx context.Context, cfg *rest.Config, opts *runserver.Op
 		}
 		fc, err := fccontroller.NewFlowController(
 			ctx,
+			opts.PoolName,
 			eppConfig.FlowControlConfig.Controller,
 			registry, saturationDetector,
 			locator,
@@ -454,6 +455,7 @@ func (r *Runner) registerInTreePlugins() {
 	fwkplugin.Register(fairness.RoundRobinFairnessPolicyType, fairness.RoundRobinFairnessPolicyFactory)
 	fwkplugin.Register(ordering.FCFSOrderingPolicyType, ordering.FCFSOrderingPolicyFactory)
 	fwkplugin.Register(ordering.EDFOrderingPolicyType, ordering.EDFOrderingPolicyFactory)
+	fwkplugin.Register(ordering.SLODeadlineOrderingPolicyType, ordering.SLODeadlineOrderingPolicyFactory)
 	// Latency predictor plugins
 	fwkplugin.Register(predictedlatency.PredictedLatencyPluginType, predictedlatency.PredictedLatencyFactory)
 	// register filter for test purpose only (used in conformance tests)
