@@ -523,9 +523,15 @@ func (p *PriorityBandConfig) applyDefaults(handle plugin.Handle) error {
 		p.Queue = defaultQueue
 		// If the policy requires priority configurability (like EDF), we must use a heap.
 		// Otherwise, we prefer the ListQueue for performance (O(1) vs O(log n)).
-		if slices.Contains(p.OrderingPolicy.RequiredQueueCapabilities(), flowcontrol.CapabilityPriorityConfigurable) {
+		caps := p.OrderingPolicy.RequiredQueueCapabilities()
+		needsHeap := slices.Contains(caps, flowcontrol.CapabilityPriorityConfigurable)
+		if needsHeap {
 			p.Queue = queue.MaxMinHeapName
 		}
+		fmt.Printf("[DEBUG-SLO] applyDefaults: priority=%d policyName=%s policyType=%s caps=%v needsHeap=%v selectedQueue=%s\n",
+			p.Priority, p.OrderingPolicy.TypedName().Name, p.OrderingPolicy.TypedName().Type, caps, needsHeap, p.Queue)
+	} else {
+		fmt.Printf("[DEBUG-SLO] applyDefaults: priority=%d queue already set to %s\n", p.Priority, p.Queue)
 	}
 	if p.MaxBytes == 0 {
 		p.MaxBytes = defaultPriorityBandMaxBytes

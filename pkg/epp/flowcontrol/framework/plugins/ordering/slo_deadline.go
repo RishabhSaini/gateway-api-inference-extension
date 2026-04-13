@@ -18,6 +18,7 @@ package ordering
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -83,25 +84,39 @@ var sloMaxDeadlineTime = time.Unix(0, 1<<63-1)
 // calculateSLODeadline computes the SLO-based deadline for a request: ReceivedTimestamp + x-slo-ttft-ms (ms).
 // The header is read from the InferenceRequest()'s headers. If the header is missing, empty, or invalid,
 // the request is assigned a far-future deadline so it sorts after SLO-bound requests.
+var sloDebugCounter int64
+
 func calculateSLODeadline(item flowcontrol.QueueItemAccessor) time.Time {
 	req := item.OriginalRequest()
 	if req == nil {
+		fmt.Println("[DEBUG-SLO] calculateSLODeadline: req is nil, returning max deadline")
 		return sloMaxDeadlineTime
 	}
 	infReq := req.InferenceRequest()
 	if infReq == nil || infReq.Headers == nil {
+		fmt.Printf("[DEBUG-SLO] calculateSLODeadline: infReq=%v headers=%v, returning max deadline\n", infReq != nil, infReq != nil && infReq.Headers != nil)
 		return sloMaxDeadlineTime
 	}
 	sloTtft := request.GetHeader(infReq.Headers, sloTtftHeader)
 	if sloTtft == "" {
+		// Log first 5 occurrences + every 50th to avoid spam
+		sloDebugCounter++
+		if sloDebugCounter <= 5 || sloDebugCounter%50 == 0 {
+			fmt.Printf("[DEBUG-SLO] calculateSLODeadline: x-slo-ttft-ms header NOT FOUND (count=%d), available headers: %v\n", sloDebugCounter, infReq.Headers)
+		}
 		return sloMaxDeadlineTime
 	}
 	ms, err := strconv.ParseInt(strings.TrimSpace(sloTtft), 10, 64)
 	if err != nil || ms < 0 {
+		fmt.Printf("[DEBUG-SLO] calculateSLODeadline: invalid x-slo-ttft-ms value=%q err=%v\n", sloTtft, err)
 		return sloMaxDeadlineTime
 	}
-	return req.ReceivedTimestamp().Add(time.Duration(ms) * time.Millisecond)
+	deadline := req.ReceivedTimestamp().Add(time.Duration(ms) * time.Millisecond)
+	fmt.Printf("[DEBUG-SLO] calculateSLODeadline: slo=%dms received=%v deadline=%v\n", ms, req.ReceivedTimestamp().Format(time.RFC3339Nano), deadline.Format(time.RFC3339Nano))
+	return deadline
 }
+
+var lessCallCounter int64
 
 // Less returns true if item 'a' should be dispatched before item 'b'.
 // It orders by SLO deadline (earliest first), using FCFS as a tie-breaker.
@@ -117,6 +132,15 @@ func (p *sloDeadlinePolicy) Less(a, b flowcontrol.QueueItemAccessor) bool {
 	}
 	deadlineA := calculateSLODeadline(a)
 	deadlineB := calculateSLODeadline(b)
+
+	lessCallCounter++
+	if lessCallCounter <= 10 || lessCallCounter%100 == 0 {
+		isMax := deadlineA.Equal(sloMaxDeadlineTime) || deadlineB.Equal(sloMaxDeadlineTime)
+		fmt.Printf("[DEBUG-SLO] Less(count=%d): deadlineA=%v deadlineB=%v aBeforeB=%v hasMaxDeadline=%v\n",
+			lessCallCounter, deadlineA.Format(time.RFC3339Nano), deadlineB.Format(time.RFC3339Nano),
+			deadlineA.Before(deadlineB), isMax)
+	}
+
 	if !deadlineA.Equal(deadlineB) {
 		return deadlineA.Before(deadlineB)
 	}

@@ -28,6 +28,8 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	"google.golang.org/protobuf/types/known/structpb"
 
+	"fmt"
+
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/common"
 	reqenvoy "sigs.k8s.io/gateway-api-inference-extension/pkg/common/envoy/request"
 	"sigs.k8s.io/gateway-api-inference-extension/pkg/epp/metadata"
@@ -65,6 +67,12 @@ func (s *StreamingServer) HandleRequestHeaders(ctx context.Context, reqCtx *Requ
 			reqCtx.TargetModelName = reqCtx.Request.Headers[header.Key]
 		}
 	}
+
+	// DEBUG: Log SLO and objective headers received from envoy
+	sloVal := reqCtx.Request.Headers["x-slo-ttft-ms"]
+	objVal := reqCtx.Request.Headers["x-gateway-inference-objective"]
+	fmt.Printf("[DEBUG-SLO] HandleRequestHeaders: x-slo-ttft-ms=%q x-gateway-inference-objective=%q totalHeaders=%d\n",
+		sloVal, objVal, len(reqCtx.Request.Headers))
 
 	if reqCtx.FairnessID == "" {
 		reqCtx.FairnessID = metadata.DefaultFairnessID
