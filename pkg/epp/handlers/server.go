@@ -236,6 +236,7 @@ func (s *StreamingServer) Process(srv extProcPb.ExternalProcessor_ProcessServer)
 					break
 				}
 
+				logger.V(logutil.DEFAULT).Info("Request body forwarded to model server", "body", string(reqCtx.Request.RawBody))
 				reqCtx.reqHeaderResp = s.generateRequestHeaderResponse(ctx, reqCtx)
 				reqCtx.reqBodyResp = s.generateRequestBodyResponses(reqCtx.Request.RawBody)
 
